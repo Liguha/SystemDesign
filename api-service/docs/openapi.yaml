@@ -1,0 +1,510 @@
+openapi: 3.0.0
+info:
+  title: Medical Records Management API
+  description: REST API for medical records management system
+  version: 1.0.0
+  contact:
+    name: System Design Team
+    
+servers:
+  - url: http://localhost:8080
+    description: Development server
+
+paths:
+  /auth/login:
+    post:
+      summary: User login
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                login:
+                  type: string
+                  example: doctor_user
+                password:
+                  type: string
+                  example: doc123
+              required:
+                - login
+                - password
+      responses:
+        '200':
+          description: Successfully logged in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthToken'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    delete:
+      summary: User logout
+      tags:
+        - Authentication
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successfully logged out
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+
+  /users:
+    post:
+      summary: Create new user (staff member)
+      tags:
+        - Users
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{login}:
+    get:
+      summary: Get user by login
+      tags:
+        - Users
+      security: []
+      parameters:
+        - name: login
+          in: path
+          required: true
+          schema:
+            type: string
+          example: doctor_user
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/search:
+    get:
+      summary: Search users by name mask
+      tags:
+        - Users
+      security: []
+      parameters:
+        - name: mask
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "Petrov"
+      responses:
+        '200':
+          description: List of matching users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '400':
+          description: Missing required parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /patients:
+    post:
+      summary: Register new patient
+      tags:
+        - Patients
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePatientRequest'
+      responses:
+        '201':
+          description: Patient registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /patients/search:
+    get:
+      summary: Search patients by full name
+      tags:
+        - Patients
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: fio
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "Sidorov Petr"
+      responses:
+        '200':
+          description: List of matching patients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Patient'
+        '400':
+          description: Missing required parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /patients/{id}:
+    get:
+      summary: Get patient by ID
+      tags:
+        - Patients
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "id_123456"
+      responses:
+        '200':
+          description: Patient found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Patient'
+        '404':
+          description: Patient not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /patients/{id}/history:
+    get:
+      summary: Get patient's medical record history
+      tags:
+        - Patients
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "id_123456"
+      responses:
+        '200':
+          description: List of patient's medical records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MedicalRecord'
+        '404':
+          description: Patient not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /records:
+    post:
+      summary: Create medical record
+      tags:
+        - Records
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRecordRequest'
+      responses:
+        '201':
+          description: Record created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Patient not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /records/{code}:
+    get:
+      summary: Get record by code
+      tags:
+        - Records
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "REC-123456-654321"
+      responses:
+        '200':
+          description: Record found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MedicalRecord'
+        '404':
+          description: Record not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token returned from /auth/login endpoint
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Not found"
+
+    AuthToken:
+      type: object
+      properties:
+        token:
+          type: string
+          example: "token_123456789_9876543210"
+        user_id:
+          type: string
+          example: "id_123456"
+        user_login:
+          type: string
+          example: "doctor_user"
+        user_role:
+          type: string
+          enum: ["admin", "doctor"]
+        expires_at:
+          type: integer
+          format: int64
+          example: 1703001600
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "id_123456"
+        login:
+          type: string
+          example: "doctor_user"
+        first_name:
+          type: string
+          example: "Ivan"
+        last_name:
+          type: string
+          example: "Petrov"
+        role:
+          type: string
+          enum: ["admin", "doctor"]
+        created_at:
+          type: integer
+          format: int64
+          example: 1702915200
+
+    CreateUserRequest:
+      type: object
+      properties:
+        login:
+          type: string
+          example: "new_doctor"
+        password:
+          type: string
+          example: "secure_password_123"
+        first_name:
+          type: string
+          example: "Oleg"
+        last_name:
+          type: string
+          example: "Sidorov"
+        role:
+          type: string
+          enum: ["admin", "doctor"]
+          default: "doctor"
+      required:
+        - login
+        - password
+        - first_name
+        - last_name
+
+    Patient:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "id_654321"
+        first_name:
+          type: string
+          example: "Peter"
+        last_name:
+          type: string
+          example: "Sidorov"
+        patronymic:
+          type: string
+          example: "Ivanovich"
+        birth_date:
+          type: string
+          format: date
+          example: "1980-05-15"
+        phone:
+          type: string
+          example: "+7-999-123-45-67"
+        registered_at:
+          type: integer
+          format: int64
+          example: 1702915200
+
+    CreatePatientRequest:
+      type: object
+      properties:
+        first_name:
+          type: string
+          example: "Peter"
+        last_name:
+          type: string
+          example: "Sidorov"
+        patronymic:
+          type: string
+          example: "Ivanovich"
+        birth_date:
+          type: string
+          format: date
+          example: "1980-05-15"
+        phone:
+          type: string
+          example: "+1-999-123-45-67"
+      required:
+        - first_name
+        - last_name
+        - birth_date
+
+    MedicalRecord:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "REC-123456-654321"
+        patient_id:
+          type: string
+          example: "id_654321"
+        created_by:
+          type: string
+          example: "doctor_user"
+        title:
+          type: string
+          example: "Initial checkup"
+        description:
+          type: string
+          example: "Patient is healthy"
+        created_at:
+          type: integer
+          format: int64
+          example: 1702915200
+
+    CreateRecordRequest:
+      type: object
+      properties:
+        patient_id:
+          type: string
+          example: "id_654321"
+        created_by:
+          type: string
+          example: "doctor_user"
+        title:
+          type: string
+          example: "Cardiology consultation"
+        description:
+          type: string
+          example: "Heartbeat is normal"
+      required:
+        - patient_id
+        - created_by
+        - title
