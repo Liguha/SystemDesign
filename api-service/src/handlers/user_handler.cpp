@@ -1,130 +1,169 @@
-#include "user_handler.hpp"
-#include <userver/formats/json/value.hpp>
-#include <userver/formats/json/value_builder.hpp>
-#include <userver/server/http/http_response.hpp>
-#include <userver/http/status_code.hpp>
-#include <ctime>
 #include <vector>
+#include <ctime>
 #include <algorithm>
+#include <string>
 #include <cctype>
+#include "user_handler.hpp"
+#include "db_utils.hpp"
+#include <userver/server/http/http_response.hpp>
+#include <userver/formats/json/value_builder.hpp>
+#include <userver/http/status_code.hpp>
+#include <userver/formats/json/value.hpp>
+
+using namespace std;      
 
 namespace handlers {
+    using HttpRequest = userver::server::http::HttpRequest;
+    using HttpHandlerBase = userver::server::handlers::HttpHandlerBase;
+    using StatusCode = userver::http::StatusCode;
+    using JsonBuilder = userver::formats::json::ValueBuilder;   
+    using HttpMethod = userver::server::http::HttpMethod;
 
-UserHandler::UserHandler(const userver::components::ComponentConfig& config,
-                        const userver::components::ComponentContext& context)
-    : HttpHandlerBase(config, context) {}
+    UserHandler::UserHandler(const userver::components::ComponentConfig& config,
+                            const userver::components::ComponentContext& context)
+        : HttpHandlerBase(config, context) {}
 
-std::string UserHandler::HandleRequestThrow(
-    const userver::server::http::HttpRequest& request,
-    userver::server::request::RequestContext&) const {
-    
-    const auto& path = request.GetRequestPath();
-    
-    auto check_authentication = [&](const userver::server::http::HttpRequest& req) {
-        const auto& auth_header = req.GetHeader("authorization");
-        return !auth_header.empty() && auth_header.rfind("Bearer ", 0) == 0;
-    };
-    
-    if (request.GetMethod() == userver::server::http::HttpMethod::kPost && path == "/users") {
-        if (!check_authentication(request)) {
-            request.GetHttpResponse().SetStatus(userver::http::StatusCode::kUnauthorized);
-            return R"({"error": "Unauthorized"})";}
-        
-        auto json = userver::formats::json::FromString(request.RequestBody());
-        
-        std::string login = json["login"].As<std::string>();
-        
-        // мокнутые данные - проверка на дубликат. В будущем будет вызов User Service
-        if (login == "doctor_user" || login == "admin_user") {
-            request.GetHttpResponse().SetStatus(userver::http::StatusCode::kConflict);
-            userver::formats::json::ValueBuilder error_builder;
-            error_builder["error"] = "User already exists";
-            return userver::formats::json::ToString(error_builder.ExtractValue());
-        }
-        
-        request.GetHttpResponse().SetStatus(userver::http::StatusCode::kCreated);
-        userver::formats::json::ValueBuilder builder;
-        builder["id"] = "id_" + login;
-        builder["login"] = login;
-        builder["first_name"] = json["first_name"].As<std::string>();
-        builder["last_name"] = json["last_name"].As<std::string>();
-        builder["role"] = json["role"].As<std::string>("doctor");
-        builder["created_at"] = std::time(nullptr);
-        return userver::formats::json::ToString(builder.ExtractValue());
+    static string ToLower(string s) {
+        transform(s.begin(), s.end(), s.begin(), ::tolower);
+        return s;
     }
-    
-    if (request.GetMethod() == userver::server::http::HttpMethod::kGet && path.find("/users/search") == 0) {
-        auto mask = request.GetArg("mask");
-        if (mask.empty()) {
-            request.GetHttpResponse().SetStatus(userver::http::StatusCode::kBadRequest);
-            userver::formats::json::ValueBuilder error_builder;
-            error_builder["error"] = "mask parameter required";
-            return userver::formats::json::ToString(error_builder.ExtractValue());
-        }
+
+    string UserHandler::HandleRequestThrow(  
+        const HttpRequest& request,
+        userver::server::request::RequestContext&) const {
         
-        // mock data for user search
-        std::vector<std::tuple<std::string, std::string, std::string>> mock_users = {
-            {"doctor_user", "Ivan", "Petrov"},
-            {"admin_user", "Admin", "System"}
+        const auto& path = request.GetRequestPath();
+        
+        auto check_authentication = [&](const HttpRequest& req) {
+            const auto& auth_header = req.GetHeader("authorization");
+            return !auth_header.empty() && auth_header.rfind("Bearer ", 0) == 0;
         };
         
-        request.GetHttpResponse().SetStatus(userver::http::StatusCode::kOk);
-        userver::formats::json::ValueBuilder array(userver::formats::json::Type::kArray);
-        
-        auto lower = [](const std::string &s) {
-            std::string r = s;
-            std::transform(r.begin(), r.end(), r.begin(), ::tolower);
-            return r;
-        };
-        
-        std::string lower_mask = lower(mask);
-        
-        for (const auto& user : mock_users) {
-            const auto &login = std::get<0>(user);
-            const auto &first_name = std::get<1>(user);
-            const auto &last_name = std::get<2>(user);
-            std::string full_name = first_name + " " + last_name;
-            
-            bool match = false;
-            if (lower(login).find(lower_mask) != std::string::npos) match = true;
-            if (lower(full_name).find(lower_mask) != std::string::npos) match = true;
-            
-            if (match) {
-                userver::formats::json::ValueBuilder user_obj;
-                user_obj["id"] = "id_" + login;
-                user_obj["login"] = login;
-                user_obj["first_name"] = first_name;
-                user_obj["last_name"] = last_name;
-                user_obj["role"] = (login == "doctor_user") ? "doctor" : "admin";
-                array.PushBack(user_obj.ExtractValue());
+        if (request.GetMethod() == HttpMethod::kPost && path == "/users") {
+            if (!check_authentication(request)) {
+                request.GetHttpResponse().SetStatus(StatusCode::kUnauthorized);
+                return R"({"error": "Unauthorized"})";        
             }
-        }
-        return userver::formats::json::ToString(array.ExtractValue());
-    }
-    
-    if (request.GetMethod() == userver::server::http::HttpMethod::kGet && path.find("/users/") == 0) {
-        std::string login = path.substr(7);
-        
-        // mock data - return user if exists
-        if (login == "doctor_user" || login == "admin_user") {
-            request.GetHttpResponse().SetStatus(userver::http::StatusCode::kOk);
-            userver::formats::json::ValueBuilder builder;
-            builder["id"] = "id_" + login;
+            
+            auto json = userver::formats::json::FromString(request.RequestBody());
+            string login = json["login"].As<string>();
+            string password = json["password"].As<string>();
+            string first_name = json["first_name"].As<string>();    
+            string last_name = json["last_name"].As<string>();
+            string role = json["role"].As<string>("doctor");
+            string id = "user_" + login;
+            try {
+                PgClient pg;
+                const char* values[6] = {id.c_str(), login.c_str(), password.c_str(), first_name.c_str(), last_name.c_str(), role.c_str()};
+                auto result = pg.ExecParams(
+                    "INSERT INTO users (id, login, password, first_name, last_name, role, created_at) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, NOW())",
+                    6, values);
+                if (!result || PQresultStatus(result.get()) != PGRES_COMMAND_OK) {
+                    string error = result ? PQresultErrorMessage(result.get()) : pg.GetError();
+                    if (error.find("duplicate key") != string::npos) {       
+                        request.GetHttpResponse().SetStatus(StatusCode::kConflict);  
+                        JsonBuilder error_builder;
+                        error_builder["error"] = "User already exists";
+                        return userver::formats::json::ToString(error_builder.ExtractValue());
+                    }
+                    request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);
+                    JsonBuilder error_builder;
+                    error_builder["error"] = "Database error";
+                    return userver::formats::json::ToString(error_builder.ExtractValue());
+                }   
+            } catch (const exception& ex) {
+                request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);      
+                JsonBuilder error_builder;
+                error_builder["error"] = ex.what();
+                return userver::formats::json::ToString(error_builder.ExtractValue());
+            }
+            request.GetHttpResponse().SetStatus(StatusCode::kCreated);
+            JsonBuilder builder;
+            builder["id"] = id;
             builder["login"] = login;
-            builder["first_name"] = (login == "doctor_user") ? "Ivan" : "Admin";
-            builder["last_name"] = (login == "doctor_user") ? "Petrov" : "System";
-            builder["role"] = (login == "doctor_user") ? "doctor" : "admin";
+            builder["first_name"] = first_name;  
+            builder["last_name"] = last_name;
+            builder["role"] = role;
+            builder["created_at"] = time(nullptr);
             return userver::formats::json::ToString(builder.ExtractValue());
         }
         
-        request.GetHttpResponse().SetStatus(userver::http::StatusCode::kNotFound);
-        userver::formats::json::ValueBuilder error_builder;
-        error_builder["error"] = "User not found";
-        return userver::formats::json::ToString(error_builder.ExtractValue());
-    }
-    
-    request.GetHttpResponse().SetStatus(userver::http::StatusCode::kNotFound);
-    return R"({"error": "Not found"})";
-}
+        if (request.GetMethod() == HttpMethod::kGet && path.find("/users/search") == 0) {
+            auto mask = request.GetArg("mask");
+            if (mask.empty()) {
+                request.GetHttpResponse().SetStatus(StatusCode::kBadRequest);
+                JsonBuilder error_builder;
+                error_builder["error"] = "mask parameter required";
+                return userver::formats::json::ToString(error_builder.ExtractValue());
+            }
+            try {
+                PgClient pg;
+                string pattern = "%" + mask + "%";
+                const char* values[3] = {pattern.c_str(), pattern.c_str(), pattern.c_str()};
+                auto result = pg.ExecParams(
+                    "SELECT id, login, first_name, last_name, role FROM users "
+                    "WHERE login ILIKE $1 OR first_name ILIKE $2 OR last_name ILIKE $3 "
+                    "ORDER BY login LIMIT 50",
+                    3,
+                    values);
+                if (!result || PQresultStatus(result.get()) != PGRES_TUPLES_OK) {
+                    request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);
+                    return R"({"error": "Database error"})";
+                }
 
+                request.GetHttpResponse().SetStatus(StatusCode::kOk);
+                JsonBuilder array(userver::formats::json::Type::kArray);
+                int rows = PQntuples(result.get());
+                for (int i = 0; i < rows; i++) {
+                    JsonBuilder user_obj;
+                    user_obj["id"] = PQgetvalue(result.get(), i, 0);
+                    user_obj["login"] = PQgetvalue(result.get(), i, 1);  
+                    user_obj["first_name"] = PQgetvalue(result.get(), i, 2);
+                    user_obj["last_name"] = PQgetvalue(result.get(), i, 3);
+                    user_obj["role"] = PQgetvalue(result.get(), i, 4);
+                    array.PushBack(user_obj.ExtractValue());
+                }
+                return userver::formats::json::ToString(array.ExtractValue());
+            } catch (const exception& ex) {
+                request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);
+                JsonBuilder error_builder;
+                error_builder["error"] = ex.what();
+                return userver::formats::json::ToString(error_builder.ExtractValue());
+            }
+        }
+        if (request.GetMethod() == HttpMethod::kGet && path.find("/users/") == 0) {
+            string login = path.substr(7);
+            try {
+                PgClient pg;
+                const char* values[1] = {login.c_str()};
+                auto result = pg.ExecParams(
+                    "SELECT id, login, first_name, last_name, role, EXTRACT(EPOCH FROM created_at)::BIGINT "
+                    "FROM users WHERE login = $1",
+                    1,values);
+                if (!result || PQresultStatus(result.get()) != PGRES_TUPLES_OK || PQntuples(result.get()) != 1) {
+                    request.GetHttpResponse().SetStatus(StatusCode::kNotFound);     
+                    JsonBuilder error_builder;
+                    error_builder["error"] = "User not found";
+                    return userver::formats::json::ToString(error_builder.ExtractValue());
+                }
+                request.GetHttpResponse().SetStatus(StatusCode::kOk);
+                JsonBuilder builder;
+                builder["id"] = PQgetvalue(result.get(), 0, 0);
+                builder["login"] = PQgetvalue(result.get(), 0, 1);
+                builder["first_name"] = PQgetvalue(result.get(), 0, 2);
+                builder["last_name"] = PQgetvalue(result.get(), 0, 3);
+                builder["role"] = PQgetvalue(result.get(), 0, 4);   
+                builder["created_at"] = stoll(PQgetvalue(result.get(), 0, 5));
+                return userver::formats::json::ToString(builder.ExtractValue());
+            } catch (const exception& ex) {
+                request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);
+                JsonBuilder error_builder;
+                error_builder["error"] = ex.what();
+                return userver::formats::json::ToString(error_builder.ExtractValue());
+            }
+        }
+        request.GetHttpResponse().SetStatus(StatusCode::kNotFound);
+        return R"({"error": "Not found"})";
+    }
 }  // namespace handlers

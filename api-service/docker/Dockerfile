@@ -1,4 +1,3 @@
-# Build stage - using official Userver image with all dependencies
 FROM ghcr.io/userver-framework/ubuntu-22.04-userver-pg:latest AS builder
 
 WORKDIR /app

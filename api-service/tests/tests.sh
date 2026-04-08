@@ -1,7 +1,8 @@
 #!/bin/bash
 TOKEN=""
-TEST_PATIENT_ID="id_patient_001"
-TEST_RECORD_CODE="REC-001-001"
+TEST_PATIENT_ID="patient_100"
+TEST_RECORD_CODE="REC-000001-000001"
+TIMESTAMP=$(date +%s)
 
 test_login() {
     local response=$(http_post "/auth/login" '{"login":"doctor_user","password":"doc123"}')
@@ -16,8 +17,9 @@ test_login_invalid() {
 
 test_create_user() {
     [ -z "$TOKEN" ] && return 1
-    local response=$(http_post "/users" '{"login":"nurse","password":"pass123","first_name":"Nurse","last_name":"Ivanova"}' "$TOKEN")
-    echo "$response" | grep -q "nurse"
+    local unique_login="nurse_$TIMESTAMP"
+    local response=$(http_post "/users" '{"login":"'$unique_login'","password":"pass123","first_name":"Nurse","last_name":"Ivanova"}' "$TOKEN")
+    echo "$response" | grep -q "$unique_login"
 }
 
 test_duplicate_user() {
@@ -38,21 +40,21 @@ test_user_not_found() {
 
 test_search_users() {
     local response=$(http_get "/users/search?mask=Ivan")
-    echo "$response" | grep -q "Ivan\|doctor"
+    echo "$response" | grep -q "Ivan"
 }
 
 test_register_patient() {
     [ -z "$TOKEN" ] && return 1
-    local response=$(http_post "/patients" '{"first_name":"Peter","last_name":"Sidorov","birth_date":"1990-01-01"}' "$TOKEN")
+    local response=$(http_post "/patients" '{"first_name":"Test","last_name":"Patient","birth_date":"1990-01-01"}' "$TOKEN")
     TEST_PATIENT_ID=$(extract_id "$response")
-    [ -n "$TEST_PATIENT_ID" ] || TEST_PATIENT_ID="id_patient_001"
+    [ -n "$TEST_PATIENT_ID" ] || TEST_PATIENT_ID="patient_100"
     return 0
 }
 
 test_search_patients() {
     [ -z "$TOKEN" ] && return 1
-    local response=$(http_get "/patients/search?fio=Petr" "$TOKEN")
-    echo "$response" | grep -q "Peter"
+    local response=$(http_get "/patients/search?fio=Sidorov" "$TOKEN")
+    echo "$response" | grep -q "Sidorov"
 }
 
 test_get_patient() {
@@ -63,9 +65,9 @@ test_get_patient() {
 
 test_create_record() {
     [ -z "$TOKEN" ] && return 1
-    local response=$(http_post "/records" "{\"patient_id\":\"$TEST_PATIENT_ID\",\"created_by\":\"doctor_user\",\"title\":\"Осмотр\"}" "$TOKEN")
+    local response=$(http_post "/records" "{\"patient_id\":\"$TEST_PATIENT_ID\",\"created_by\":\"doctor_user\",\"title\":\"Test Record\"}" "$TOKEN")
     TEST_RECORD_CODE=$(echo "$response" | grep -o '"code":"[^"]*' | cut -d'"' -f4)
-    [ -n "$TEST_RECORD_CODE" ] || TEST_RECORD_CODE="REC-001-001"
+    [ -n "$TEST_RECORD_CODE" ] || TEST_RECORD_CODE="REC-000001-000001"
     return 0
 }
 
@@ -90,9 +92,9 @@ test_workflow() {
     local admin=$(http_post "/auth/login" '{"login":"admin_user","password":"admin123"}')
     local admin_token=$(extract_token "$admin")
     [ -z "$admin_token" ] && return 1
-    
-    local doctor=$(http_post "/users" '{"login":"dr_test","password":"secure","first_name":"Doctor","last_name":"Test","role":"doctor"}' "$admin_token")
-    echo "$doctor" | grep -q "dr_test"
+    local unique_login="dr_test_$TIMESTAMP"
+    local doctor=$(http_post "/users" '{"login":"'$unique_login'","password":"secure","first_name":"Doctor","last_name":"Test","role":"doctor"}' "$admin_token")
+    echo "$doctor" | grep -q "$unique_login"
 }
 
 test_data_format() {
