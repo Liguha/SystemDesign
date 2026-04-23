@@ -21,6 +21,12 @@ components_manager:
           level: info
           overflow_behavior: discard
 
+    dns-client:
+      fs-task-processor: fs-task-processor
+
+    mongo-medical:
+      dbconnection: mongodb://mongo:27017/medical
+
     auth-handler:
       path: /auth/{action}
       method: POST
@@ -36,7 +42,8 @@ components_manager:
       method: GET,POST
       task_processor: main-task-processor
 
-    record-handler:
+    handler-record:
       path: /records/*
       method: GET,POST
       task_processor: main-task-processor
+    

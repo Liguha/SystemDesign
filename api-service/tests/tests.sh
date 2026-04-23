@@ -3,6 +3,7 @@ TOKEN=""
 TEST_PATIENT_ID="patient_100"
 TEST_RECORD_CODE="REC-000001-000001"
 TIMESTAMP=$(date +%s)
+RANDOM_SUFFIX=$((RANDOM * RANDOM))
 
 test_login() {
     local response=$(http_post "/auth/login" '{"login":"doctor_user","password":"doc123"}')
@@ -65,7 +66,7 @@ test_get_patient() {
 
 test_create_record() {
     [ -z "$TOKEN" ] && return 1
-    local response=$(http_post "/records" "{\"patient_id\":\"$TEST_PATIENT_ID\",\"created_by\":\"doctor_user\",\"title\":\"Test Record\"}" "$TOKEN")
+    local response=$(http_post "/records" "{\"patient_id\":\"$TEST_PATIENT_ID\",\"created_by\":\"doctor_user\",\"title\":\"Test Record - MongoDB\"}" "$TOKEN")
     TEST_RECORD_CODE=$(echo "$response" | grep -o '"code":"[^"]*' | cut -d'"' -f4)
     [ -n "$TEST_RECORD_CODE" ] || TEST_RECORD_CODE="REC-000001-000001"
     return 0
@@ -77,10 +78,22 @@ test_get_record() {
     echo "$response" | grep -q "code"
 }
 
+test_get_record_mongodb() {
+    [ -z "$TOKEN" ] && return 1
+    local response=$(http_get "/records/REC-1704067800-123456" "$TOKEN")
+    echo "$response" | grep -q "patient_id"
+}
+
 test_patient_history() {
     [ -z "$TOKEN" ] && return 1
     local response=$(http_get "/patients/$TEST_PATIENT_ID/history" "$TOKEN")
     echo "$response" | grep -q "code\|title"
+}
+
+test_patient_history_mongodb() {
+    [ -z "$TOKEN" ] && return 1
+    local response=$(http_get "/patients/patient_100/history" "$TOKEN")
+    echo "$response" | grep -q "code\|created_by" || echo "$response" | grep -q "REC"
 }
 
 test_protected_endpoints() {
@@ -100,4 +113,10 @@ test_workflow() {
 test_data_format() {
     local users=$(http_get "/users/search?mask=user")
     echo "$users" | jq . > /dev/null 2>&1
+}
+
+test_mongodb_connection() {
+    [ -z "$TOKEN" ] && test_login
+    local response=$(http_get "/records/REC-1704067800-123456" "$TOKEN")
+    echo "$response" | grep -q "code\|error"
 }

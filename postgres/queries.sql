@@ -26,18 +26,3 @@ FROM patients
 WHERE CONCAT_WS(' ', first_name, last_name) ILIKE '%ivanov%'
    OR CONCAT_WS(' ', last_name, first_name) ILIKE '%ivanov%'
 ORDER BY last_name, first_name;
-
--- Create medical record, used in: record_handler
-INSERT INTO medical_records (code, patient_id, created_by, title, description, created_at)
-VALUES ('REC-010011-000001', 'patient_100', 'doctor_user', 'Specialist referral', 'Patient referred to ophthalmology.', NOW());
-
--- Get patient history, used in: patient_handler
-SELECT code, patient_id, created_by, title, description, EXTRACT(EPOCH FROM created_at)::BIGINT AS created_at
-FROM medical_records
-WHERE patient_id = 'patient_100'
-ORDER BY created_at DESC;
-
--- Get record by code, used in: record_handler
-SELECT code, patient_id, created_by, title, description, EXTRACT(EPOCH FROM created_at)::BIGINT AS created_at
-FROM medical_records
-WHERE code = 'REC-000001-000001';

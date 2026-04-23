@@ -22,16 +22,9 @@
   - phone (TEXT)
   - registered_at (TIMESTAMPTZ)
 
-- **medical_records**: Медицинские записи
-  - code (TEXT PRIMARY KEY)
-  - patient_id (TEXT FK -> patients)
-  - created_by (TEXT FK -> users.login)
-  - title, description (TEXT)
-  - created_at (TIMESTAMPTZ)
-
 ### Индексы
 - GIN trigram индексы для полнотекстового поиска по именам и логинам
-- B-tree индексы на внешние ключи и patient_id
+- B-tree индексы на внешние ключи
 
 ## Операции
 Примеры всех операций в файле `queries.sql`.

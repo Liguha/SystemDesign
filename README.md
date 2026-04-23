@@ -6,8 +6,8 @@
 |--------- | ---------------- |
 | 1 | Директория `architecture` |
 | 2 | Ветка `lab2` |
-| 3 | Ветка `main` |
-| 4 | ... |
+| 3 | Ветка `lab3` |
+| 4 | Ветка `main` |
 | 5 | ... |
 | 6 | ... |
 
@@ -18,7 +18,8 @@ docker compose up --build -d
 
 После развёртывания к контейенерам можно получить доступ по:
 - API - `localhost:8080`
-- PostgreSQL - `localhost:5432`.
+- PostgreSQL - `localhost:5432`
+- MongoDB - `localhost:27017`
 
 **Переинициализация БД:**
 ```bash

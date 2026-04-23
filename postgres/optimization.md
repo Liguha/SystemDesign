@@ -4,8 +4,6 @@
 2. `idx_users_login_trgm` — GIN trigram индекс по `lower(login)`..
 3. `idx_users_name_trgm` — GIN trigram индекс по `lower(first_name) || ' ' || lower(last_name)`.
 4. `idx_patients_name_trgm` — GIN trigram индекс для поиска пациентов по ФИО.
-5. `idx_medical_records_patient_id` — B-tree индекс по `patient_id`.
-6. `idx_medical_records_created_by` — B-tree индекс по `created_by`.
 
 ## Оптимизация запросов
 - Запросы поиска по маске выполнены через `ILIKE` и GIN trigram индексы, что снижает затраты при подстрочных поисках.
@@ -44,10 +42,8 @@ Planning Time: 0.267 ms
 Execution Time: 0.231 ms
 ```
 
-### 3. Поиск медицинской записи по коду
-```sql
-EXPLAIN ANALYZE SELECT code, patient_id, created_by, title, description, EXTRACT(EPOCH FROM created_at)::BIGINT AS created_at
-FROM medical_records
+### 3. Medical records queries (перемещены в MongoDB)
+Запросы по медицинским записям теперь выполняются в MongoDB (см. [../mongodb/queries.md](../mongodb/queries.md))
 WHERE code = 'REC-000001-000001';
 ```
 Результат выполнения:

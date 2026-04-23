@@ -21,15 +21,3 @@ INSERT INTO patients (id, first_name, last_name, patronymic, birth_date, phone, 
 ('patient_107', 'Anna', 'Kovaleva', 'Dmitrievna', '1995-12-12', '+7-918-777-07-07', NOW()),
 ('patient_108', 'Ivan', 'Orlov', 'Alekseevich', '1988-08-08', '+7-919-888-08-08', NOW()),
 ('patient_109', 'Nina', 'Novikova', 'Vladimirovna', '1991-04-04', '+7-920-999-09-09', NOW());
-
-INSERT INTO medical_records (code, patient_id, created_by, title, description, created_at) VALUES
-('REC-000001-000001', 'patient_100', 'doctor_user', 'Initial checkup', 'Patient is healthy.', NOW()),
-('REC-000002-000002', 'patient_100', 'doctor_user', 'Follow-up visit', 'Condition improved.', NOW()),
-('REC-000003-000003', 'patient_101', 'nina_smirnova', 'Annual physical', 'No serious complaints.', NOW()),
-('REC-000004-000004', 'patient_102', 'oleg_kuznetsov', 'Blood pressure check', 'Normal values.', NOW()),
-('REC-000005-000005', 'patient_103', 'pavel_sokolov', 'Vaccination', 'Seasonal vaccine administered.', NOW()),
-('REC-000006-000006', 'patient_104', 'elena_kovaleva', 'Allergy exam', 'Minor reaction to pollen.', NOW()),
-('REC-000007-000007', 'patient_105', 'maria_fedorova', 'MRI result', 'No abnormalities detected.', NOW()),
-('REC-000008-000008', 'patient_106', 'sergey_ivanov', 'Dental review', 'Cavity treatment suggested.', NOW()),
-('REC-000009-000009', 'patient_107', 'anna_popova', 'Dermatology consult', 'Dry skin treatment prescribed.', NOW()),
-('REC-000010-000010', 'patient_108', 'ivan_orlov', 'Cardiology check', 'Arrhythmia not detected.', NOW());

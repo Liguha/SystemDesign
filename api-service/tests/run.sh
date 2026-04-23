@@ -31,6 +31,9 @@ main() {
         "test_protected_endpoints"
         "test_workflow"
         "test_data_format"
+        "test_mongodb_connection"
+        "test_get_record_mongodb"
+        "test_patient_history_mongodb"
     )
     
     for test_func in "${tests[@]}"; do

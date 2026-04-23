@@ -20,4 +20,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
     CMD curl -f http://localhost:8080/users/admin_user || exit 1
 
-ENTRYPOINT ["/app/medical-api-gateway"]
+ENTRYPOINT ["/app/medical-api-gateway", "--config", "/app/config/config.yaml"]
