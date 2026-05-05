@@ -2,12 +2,14 @@
 #include <vector>  
 #include <cstdlib>
 #include <string>
+#include <string_view>
 #include <ctime>
 #include <sstream>
 #include <iomanip>
 #include "db_utils.hpp"
 #include "../mongo_client.hpp"
-#include <userver/components/component_context.hpp> // Fixes "incomplete type"
+#include "../globals.hpp"
+#include <userver/components/component_context.hpp>
 #include <userver/storages/mongo/component.hpp>
 #include <userver/formats/json/value.hpp>
 #include <userver/server/http/http_response.hpp>
@@ -57,6 +59,16 @@ namespace handlers {
                 request.GetHttpResponse().SetStatus(StatusCode::kUnauthorized);
                 return R"({"error": "Unauthorized"})";
             }
+            string user_id = request.GetHeader("x-user-id");
+            if (user_id.empty()) user_id = "anonymous";
+            if (!g_rate_limiter.TryConsume("create_record:" + user_id)) {
+                request.GetHttpResponse().SetStatus(StatusCode::kTooManyRequests);
+                request.GetHttpResponse().SetHeader(string_view("X-RateLimit-Limit"), "100");
+                request.GetHttpResponse().SetHeader(string_view("X-RateLimit-Remaining"), "0");
+                request.GetHttpResponse().SetHeader(string_view("X-RateLimit-Reset"), 
+                    to_string(time(nullptr) + g_rate_limiter.GetRetryAfterSeconds("create_record:" + user_id)));
+                return R"({"error": "Too many requests"})";
+            }
             
             try {
                 auto json = userver::formats::json::FromString(request.RequestBody());
@@ -87,7 +99,7 @@ namespace handlers {
                     << R"(})";
                 
                 string oid = mongo.InsertOne("medical_records", doc.str());
-                
+                g_cache.Invalidate("patients:history:" + patient_id);
                 request.GetHttpResponse().SetStatus(StatusCode::kCreated);
                 JsonBuilder builder;
                 builder["code"] = record_code;

@@ -7,6 +7,11 @@
 #include "handlers/user_handler.hpp"     
 #include "handlers/patient_handler.hpp"              
 #include "handlers/record_handler.hpp"
+#include "rate_limiter.hpp"
+#include "cache.hpp"
+
+ServiceCache g_cache;   
+RateLimiter g_rate_limiter(100, 60);
 
 int main(int argc, char* argv[]) {
     const auto component_list = userver::components::MinimalServerComponentList()

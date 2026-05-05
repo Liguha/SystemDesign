@@ -10,6 +10,8 @@ add_executable(medical-api-gateway
     src/main.cpp
     src/db_utils.cpp
     src/mongo_client.cpp
+    src/rate_limiter.cpp
+    src/cache.cpp
     src/handlers/auth_handler.cpp
     src/handlers/user_handler.cpp
     src/handlers/patient_handler.cpp

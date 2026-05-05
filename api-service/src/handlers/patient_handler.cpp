@@ -3,9 +3,11 @@
 #include <ctime>
 #include <cstdlib>
 #include <string>  
+#include <string_view>
 #include <algorithm>
 #include "patient_handler.hpp"
 #include "db_utils.hpp"
+#include "../globals.hpp"
 #include <userver/formats/json/value.hpp>
 #include <userver/formats/json/value_builder.hpp>
 #include <userver/server/http/http_response.hpp>
@@ -45,6 +47,18 @@ namespace handlers {
                 request.GetHttpResponse().SetStatus(StatusCode::kUnauthorized);
                 return R"({"error": "Unauthorized"})";
             }
+
+            string user_id = request.GetHeader("x-user-id");
+            if (user_id.empty()) user_id = "anonymous";
+            if (!g_rate_limiter.TryConsume("register_patient:" + user_id)) {
+                request.GetHttpResponse().SetStatus(StatusCode::kTooManyRequests);
+                request.GetHttpResponse().SetHeader(std::string_view("X-RateLimit-Limit"), "200");
+                request.GetHttpResponse().SetHeader(std::string_view("X-RateLimit-Remaining"), "0");
+                request.GetHttpResponse().SetHeader(std::string_view("X-RateLimit-Reset"), 
+                    std::to_string(std::time(nullptr) + g_rate_limiter.GetRetryAfterSeconds("register_patient:" + user_id)));
+                return R"({"error": "Too many requests"})";
+            }
+
             auto json = userver::formats::json::FromString(request.RequestBody());
             string first_name = json["first_name"].As<string>();
             string last_name = json["last_name"].As<string>();  
@@ -63,6 +77,7 @@ namespace handlers {
                     request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);
                     return R"({"error": "Database error"})";
                 }
+                g_cache.InvalidatePattern("patients:search:*");
             } catch (const exception& ex) {
                 request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);
                 JsonBuilder error_builder;
@@ -95,6 +110,14 @@ namespace handlers {
                 return userver::formats::json::ToString(error_builder.ExtractValue());
             }
 
+            string cache_key = "patients:search:" + fio;
+            auto cached_result = g_cache.Get(cache_key);
+            if (cached_result) {
+                request.GetHttpResponse().SetStatus(StatusCode::kOk);
+                request.GetHttpResponse().SetHeader(std::string_view("X-Cache"), "HIT");
+                return *cached_result;
+            }
+
             try {
                 PgClient pg;
                 string pattern = "%" + fio + "%";
@@ -111,6 +134,7 @@ namespace handlers {
                 }
 
                 request.GetHttpResponse().SetStatus(StatusCode::kOk);
+                request.GetHttpResponse().SetHeader(std::string_view("X-Cache"), "MISS");
                 JsonBuilder array(userver::formats::json::Type::kArray);
                 int rows = PQntuples(result.get());
                 for (int i = 0; i < rows; i++) {
@@ -124,7 +148,10 @@ namespace handlers {
                     patient_obj["registered_at"] = stoll(PQgetvalue(result.get(), i, 6));
                     array.PushBack(patient_obj.ExtractValue());
                 }
-                return userver::formats::json::ToString(array.ExtractValue());
+                string result_json = userver::formats::json::ToString(array.ExtractValue());
+                g_cache.Set(cache_key, result_json, 900);
+                
+                return result_json;
             } catch (const exception& ex) {
                 request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);
                 JsonBuilder error_builder;

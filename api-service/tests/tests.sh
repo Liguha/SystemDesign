@@ -86,7 +86,7 @@ test_get_record_mongodb() {
 
 test_patient_history() {
     [ -z "$TOKEN" ] && return 1
-    local response=$(http_get "/patients/$TEST_PATIENT_ID/history" "$TOKEN")
+    local response=$(http_get "/patients/patient_100/history" "$TOKEN")
     echo "$response" | grep -q "code\|title"
 }
 
@@ -108,6 +108,51 @@ test_workflow() {
     local unique_login="dr_test_$TIMESTAMP"
     local doctor=$(http_post "/users" '{"login":"'$unique_login'","password":"secure","first_name":"Doctor","last_name":"Test","role":"doctor"}' "$admin_token")
     echo "$doctor" | grep -q "$unique_login"
+}
+
+test_user_cache() {
+    local first_response=$(curl -s -i -X GET "$API/users/admin_user")
+    echo "$first_response" | grep -qi '^X-Cache: \(MISS\|HIT\)' || return 1
+    echo "$first_response" | grep -q 'admin_user' || return 1
+
+    local second_response=$(curl -s -i -X GET "$API/users/admin_user")
+    echo "$second_response" | grep -qi '^X-Cache: HIT' || return 1
+    return 0
+}
+
+test_rate_limit_records() {
+    if [ -z "$TOKEN" ]; then
+        test_login || return 1
+    fi
+    local user_id="rate_test_$RANDOM_SUFFIX"
+    local request_body_template='{"login":"rate_user_%s_%s","password":"pass123","first_name":"Rate","last_name":"Limiter"}'
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    local status_code
+    local have_429=0
+
+    for i in $(seq 1 120); do
+        local login_value="rate_user_${user_id}_${i}"
+        local request_body
+        request_body=$(printf "$request_body_template" "$user_id" "$i")
+        curl -s -i -X POST "$API/users" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "x-user-id: $user_id" \
+            -d "$request_body" > "$temp_dir/req_$i" &
+    done
+    wait
+    for file in "$temp_dir"/req_*; do
+        if grep -q '^HTTP/1\.[01] 429' "$file"; then
+            have_429=1
+            grep -qi '^X-RateLimit-Limit:' "$file" || return 1
+            grep -qi '^X-RateLimit-Remaining: 0' "$file" || return 1
+            grep -qi 'Too many requests' "$file" || return 1
+            break
+        fi
+    done
+    rm -rf "$temp_dir"
+    [ "$have_429" -eq 1 ]
 }
 
 test_data_format() {

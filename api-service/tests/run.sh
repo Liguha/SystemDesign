@@ -28,6 +28,8 @@ main() {
         "test_create_record"
         "test_get_record"
         "test_patient_history"
+        "test_user_cache"
+        "test_rate_limit_records"
         "test_protected_endpoints"
         "test_workflow"
         "test_data_format"

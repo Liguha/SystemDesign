@@ -2,9 +2,11 @@
 #include <ctime>
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include <cctype>
 #include "user_handler.hpp"
 #include "db_utils.hpp"
+#include "../globals.hpp"
 #include <userver/server/http/http_response.hpp>
 #include <userver/formats/json/value_builder.hpp>
 #include <userver/http/status_code.hpp>
@@ -44,6 +46,19 @@ namespace handlers {
                 request.GetHttpResponse().SetStatus(StatusCode::kUnauthorized);
                 return R"({"error": "Unauthorized"})";        
             }
+
+            string user_id = request.GetHeader("x-user-id");
+            if (user_id.empty()) user_id = "anonymous";
+            if (!g_rate_limiter.TryConsume("create_user:" + user_id)) {
+                request.GetHttpResponse().SetStatus(StatusCode::kTooManyRequests);
+                request.GetHttpResponse().SetHeader(string_view("X-RateLimit-Limit"), "100");
+                request.GetHttpResponse().SetHeader(string_view("X-RateLimit-Remaining"), "0");
+                request.GetHttpResponse().SetHeader(string_view("X-RateLimit-Reset"), 
+                    to_string(time(nullptr) + g_rate_limiter.GetRetryAfterSeconds("create_user:" + user_id)));
+                request.GetHttpResponse().SetHeader(string_view("Retry-After"), 
+                    to_string(g_rate_limiter.GetRetryAfterSeconds("create_user:" + user_id)));
+                return R"({"error": "Too many requests"})";
+            }
             
             auto json = userver::formats::json::FromString(request.RequestBody());
             string login = json["login"].As<string>();
@@ -71,7 +86,8 @@ namespace handlers {
                     JsonBuilder error_builder;
                     error_builder["error"] = "Database error";
                     return userver::formats::json::ToString(error_builder.ExtractValue());
-                }   
+                }
+                g_cache.InvalidatePattern("users:search:*");
             } catch (const exception& ex) {
                 request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);      
                 JsonBuilder error_builder;
@@ -97,6 +113,15 @@ namespace handlers {
                 error_builder["error"] = "mask parameter required";
                 return userver::formats::json::ToString(error_builder.ExtractValue());
             }
+
+            string cache_key = "users:search:" + mask;
+            auto cached_result = g_cache.Get(cache_key);
+            if (cached_result) {
+                request.GetHttpResponse().SetStatus(StatusCode::kOk);
+                request.GetHttpResponse().SetHeader(string_view("X-Cache"), "HIT");
+                return *cached_result;
+            }
+
             try {
                 PgClient pg;
                 string pattern = "%" + mask + "%";
@@ -113,6 +138,7 @@ namespace handlers {
                 }
 
                 request.GetHttpResponse().SetStatus(StatusCode::kOk);
+                request.GetHttpResponse().SetHeader(string_view("X-Cache"), "MISS");
                 JsonBuilder array(userver::formats::json::Type::kArray);
                 int rows = PQntuples(result.get());
                 for (int i = 0; i < rows; i++) {
@@ -124,7 +150,9 @@ namespace handlers {
                     user_obj["role"] = PQgetvalue(result.get(), i, 4);
                     array.PushBack(user_obj.ExtractValue());
                 }
-                return userver::formats::json::ToString(array.ExtractValue());
+                string result_json = userver::formats::json::ToString(array.ExtractValue());
+                g_cache.Set(cache_key, result_json, 600);
+                return result_json;
             } catch (const exception& ex) {
                 request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);
                 JsonBuilder error_builder;
@@ -134,13 +162,24 @@ namespace handlers {
         }
         if (request.GetMethod() == HttpMethod::kGet && path.find("/users/") == 0) {
             string login = path.substr(7);
+            string cache_key = "user:login:" + login;
+            auto cached_result = g_cache.Get(cache_key);
+            if (cached_result) {
+                request.GetHttpResponse().SetStatus(StatusCode::kOk);
+                request.GetHttpResponse().SetHeader(string_view("X-Cache"), "HIT");
+                int remaining = g_rate_limiter.GetRemainingTokens("get_user:" + login);
+                request.GetHttpResponse().SetHeader(string_view("X-RateLimit-Limit"), "100");
+                request.GetHttpResponse().SetHeader(string_view("X-RateLimit-Remaining"), to_string(remaining));
+                return *cached_result;
+            }
+
             try {
                 PgClient pg;
                 const char* values[1] = {login.c_str()};
                 auto result = pg.ExecParams(
                     "SELECT id, login, first_name, last_name, role, EXTRACT(EPOCH FROM created_at)::BIGINT "
                     "FROM users WHERE login = $1",
-                    1,values);
+                    1, values);
                 if (!result || PQresultStatus(result.get()) != PGRES_TUPLES_OK || PQntuples(result.get()) != 1) {
                     request.GetHttpResponse().SetStatus(StatusCode::kNotFound);     
                     JsonBuilder error_builder;
@@ -148,6 +187,7 @@ namespace handlers {
                     return userver::formats::json::ToString(error_builder.ExtractValue());
                 }
                 request.GetHttpResponse().SetStatus(StatusCode::kOk);
+                request.GetHttpResponse().SetHeader(string_view("X-Cache"), "MISS");
                 JsonBuilder builder;
                 builder["id"] = PQgetvalue(result.get(), 0, 0);
                 builder["login"] = PQgetvalue(result.get(), 0, 1);
@@ -155,7 +195,13 @@ namespace handlers {
                 builder["last_name"] = PQgetvalue(result.get(), 0, 3);
                 builder["role"] = PQgetvalue(result.get(), 0, 4);   
                 builder["created_at"] = stoll(PQgetvalue(result.get(), 0, 5));
-                return userver::formats::json::ToString(builder.ExtractValue());
+                string result_json = userver::formats::json::ToString(builder.ExtractValue());
+                g_cache.Set(cache_key, result_json, 600);
+                int remaining = g_rate_limiter.GetRemainingTokens("get_user:" + login);
+                request.GetHttpResponse().SetHeader(string_view("X-RateLimit-Limit"), "100");
+                request.GetHttpResponse().SetHeader(string_view("X-RateLimit-Remaining"), to_string(remaining));
+                
+                return result_json;
             } catch (const exception& ex) {
                 request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);
                 JsonBuilder error_builder;
