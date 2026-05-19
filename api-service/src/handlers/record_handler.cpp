@@ -9,6 +9,7 @@
 #include "db_utils.hpp"
 #include "../mongo_client.hpp"
 #include "../globals.hpp"
+#include "../event_publisher.hpp"
 #include <userver/components/component_context.hpp>
 #include <userver/storages/mongo/component.hpp>
 #include <userver/formats/json/value.hpp>
@@ -28,7 +29,8 @@ namespace handlers {
     RecordHandler::RecordHandler(const userver::components::ComponentConfig& config,
                                  const userver::components::ComponentContext& context)  
         : HttpHandlerBase(config, context),
-          mongo_pool_(context.FindComponent<userver::components::Mongo>("mongo-medical").GetPool()) {}
+          mongo_pool_(context.FindComponent<userver::components::Mongo>("mongo-medical").GetPool()),
+          event_publisher_(context.FindComponent<components::EventPublisher>("event-publisher")) {}
 
     static string GenerateRecordCode() {
         auto ts = to_string(time(nullptr));
@@ -100,6 +102,13 @@ namespace handlers {
                 
                 string oid = mongo.InsertOne("medical_records", doc.str());
                 g_cache.Invalidate("patients:history:" + patient_id);
+                JsonBuilder payload;
+                payload["code"] = record_code;
+                payload["patient_id"] = patient_id;
+                payload["created_by"] = created_by;
+                payload["title"] = title;
+                payload["created_at"] = iso_time;
+                event_publisher_.PublishEvent("record.created", payload.ExtractValue());
                 request.GetHttpResponse().SetStatus(StatusCode::kCreated);
                 JsonBuilder builder;
                 builder["code"] = record_code;

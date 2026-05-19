@@ -2,6 +2,8 @@
 #include <userver/server/handlers/http_handler_base.hpp>
 #include <userver/storages/mongo/pool.hpp>
 
+namespace components { class EventPublisher; }
+
 namespace handlers {
     class RecordHandler final : public userver::server::handlers::HttpHandlerBase {
     public:
@@ -16,5 +18,6 @@ namespace handlers {
 
     private:
         userver::storages::mongo::PoolPtr mongo_pool_; 
+        components::EventPublisher& event_publisher_;
     };
 }

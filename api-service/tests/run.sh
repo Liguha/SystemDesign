@@ -27,6 +27,7 @@ main() {
         "test_get_patient"
         "test_create_record"
         "test_get_record"
+        "test_event_bus"
         "test_patient_history"
         "test_user_cache"
         "test_rate_limit_records"

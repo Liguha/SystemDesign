@@ -8,6 +8,7 @@
 #include "patient_handler.hpp"
 #include "db_utils.hpp"
 #include "../globals.hpp"
+#include "../event_publisher.hpp"
 #include <userver/formats/json/value.hpp>
 #include <userver/formats/json/value_builder.hpp>
 #include <userver/server/http/http_response.hpp>
@@ -24,7 +25,8 @@ namespace handlers {
 
     PatientHandler::PatientHandler(const userver::components::ComponentConfig& config,  
                                 const userver::components::ComponentContext& context)
-        : HttpHandlerBase(config, context) {}
+        : HttpHandlerBase(config, context),
+          event_publisher_(context.FindComponent<components::EventPublisher>("event-publisher")) {}
 
     static string ToLower(string s) {
         transform(s.begin(), s.end(), s.begin(), ::tolower);
@@ -78,6 +80,15 @@ namespace handlers {
                     return R"({"error": "Database error"})";
                 }
                 g_cache.InvalidatePattern("patients:search:*");
+                JsonBuilder payload;
+                payload["id"] = id;
+                payload["first_name"] = first_name;
+                payload["last_name"] = last_name;
+                payload["patronymic"] = patronymic;
+                payload["birth_date"] = birth_date;
+                payload["phone"] = phone;
+                payload["registered_at"] = time(nullptr);
+                event_publisher_.PublishEvent("patient.registered", payload.ExtractValue());
             } catch (const exception& ex) {
                 request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);
                 JsonBuilder error_builder;

@@ -3,6 +3,8 @@
 #include <userver/server/handlers/http_handler_base.hpp>
 #include <userver/components/component_context.hpp>
 
+namespace components { class EventPublisher; }
+
 namespace handlers {
     class UserHandler final : public userver::server::handlers::HttpHandlerBase {  
     public:
@@ -13,5 +15,8 @@ namespace handlers {
 
         std::string HandleRequestThrow(const userver::server::http::HttpRequest& request,
                                     userver::server::request::RequestContext&) const override;   
+
+    private:
+        components::EventPublisher& event_publisher_;
     };
 }  // namespace handlers    

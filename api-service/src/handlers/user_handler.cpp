@@ -7,6 +7,7 @@
 #include "user_handler.hpp"
 #include "db_utils.hpp"
 #include "../globals.hpp"
+#include "../event_publisher.hpp"
 #include <userver/server/http/http_response.hpp>
 #include <userver/formats/json/value_builder.hpp>
 #include <userver/http/status_code.hpp>
@@ -23,7 +24,8 @@ namespace handlers {
 
     UserHandler::UserHandler(const userver::components::ComponentConfig& config,
                             const userver::components::ComponentContext& context)
-        : HttpHandlerBase(config, context) {}
+        : HttpHandlerBase(config, context),
+          event_publisher_(context.FindComponent<components::EventPublisher>("event-publisher")) {}
 
     static string ToLower(string s) {
         transform(s.begin(), s.end(), s.begin(), ::tolower);
@@ -88,6 +90,14 @@ namespace handlers {
                     return userver::formats::json::ToString(error_builder.ExtractValue());
                 }
                 g_cache.InvalidatePattern("users:search:*");
+                JsonBuilder payload;
+                payload["id"] = id;
+                payload["login"] = login;
+                payload["first_name"] = first_name;
+                payload["last_name"] = last_name;
+                payload["role"] = role;
+                payload["created_at"] = time(nullptr);
+                event_publisher_.PublishEvent("user.created", payload.ExtractValue());
             } catch (const exception& ex) {
                 request.GetHttpResponse().SetStatus(StatusCode::kInternalServerError);      
                 JsonBuilder error_builder;

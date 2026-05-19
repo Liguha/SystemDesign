@@ -96,6 +96,21 @@ test_patient_history_mongodb() {
     echo "$response" | grep -q "code\|created_by" || echo "$response" | grep -q "REC"
 }
 
+test_event_bus() {
+    [ -z "$TOKEN" ] && return 1
+
+    local attempts=0
+    while [ $attempts -lt 6 ]; do
+        local response=$(http_get "/events?type=record.created" "$TOKEN")
+        if echo "$response" | grep -q "$TEST_RECORD_CODE"; then
+            return 0
+        fi
+        sleep 1
+        attempts=$((attempts + 1))
+    done
+    return 1
+}
+
 test_protected_endpoints() {
     local response=$(http_post "/patients" '{"first_name":"Test","last_name":"User","birth_date":"2000-01-01"}')
     echo "$response" | grep -q "error\|Unauthorized"

@@ -8,6 +8,12 @@ components_manager:
   default_task_processor: main-task-processor
 
   components:
+    secdist: {}
+    default-secdist-provider:
+      config: /app/config/secdist.json
+      missing-ok: false
+      environment-secrets-key: SECDIST_CONFIG
+
     server:
       listener:
         port: 8080
@@ -27,6 +33,24 @@ components_manager:
     mongo-medical:
       dbconnection: mongodb://mongo:27017/medical
 
+    rabbitmq:
+      secdist_alias: rabbitmq
+      min_pool_size: 1
+      max_pool_size: 5
+      max_in_flight_requests: 5
+      use_secure_connection: false
+
+    event-publisher:
+      exchange_name: medical.events
+      rabbit_name: rabbitmq
+
+    event-log-consumer:
+      rabbit_name: rabbitmq
+      queue: medical.events.log
+      routing_key: event.#
+      exchange_name: medical.events
+      prefetch_count: 5
+
     auth-handler:
       path: /auth/{action}
       method: POST
@@ -45,5 +69,10 @@ components_manager:
     handler-record:
       path: /records/*
       method: GET,POST
+      task_processor: main-task-processor
+
+    event-handler:
+      path: /events
+      method: GET
       task_processor: main-task-processor
     
