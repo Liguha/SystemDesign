@@ -8,8 +8,8 @@
 | 2 | Ветка `lab2` |
 | 3 | Ветка `lab3` |
 | 4 | Ветка `lab4` |
-| 5 | Ветка `main` |
-| 6 | ... |
+| 5 | Ветка `lab5` |
+| 6 | Ветка `main` |
 
 ## Развертывание системы
 ```bash
@@ -20,6 +20,7 @@ docker compose up --build -d
 - API - `localhost:8080`
 - PostgreSQL - `localhost:5432`
 - MongoDB - `localhost:27017`
+- RabbitMQ - `localhost:5672`
 
 **Переинициализация БД:**
 ```bash
